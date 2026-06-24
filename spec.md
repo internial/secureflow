@@ -342,9 +342,13 @@ Jobs in order (main branch push only for deployment jobs):
 1. git-secrets          — scan for leaked credentials
 2. build-and-test       — Java 21, mvn clean verify, upload test results
 3. codeql               — static analysis for Java vulnerabilities
-4. checkov-cfnlint      — Checkov + cfn-lint on /cloudformation (runs in parallel)
+4. checkov-cfnlint      — Checkov (security) + cfn-lint (template syntax) on /cloudformation
+                           cfn-lint: .cfnlintrc.yaml ignores catalog rules (E3062, W3691);
+                           CI fails only on cfn-lint errors, not warnings
 5. deploy-infrastructure — CloudFormation stacks in dependency order (see Phase 9)
-                           Skips stacks that already exist (safe to run on every push)
+                           On failure: prints failed resources + stack events (not just ROLLBACK_COMPLETE)
+                           Stops on ROLLBACK_COMPLETE with delete-stack instructions
+                           Skips stacks in unexpected states; updates stacks that already exist
                            Fetches RDS endpoint from stack output automatically
                            Outputs: rds-endpoint, oidc-url
 6. docker-build-push    — Build + push to ECR (tagged with github.sha + latest)
@@ -380,7 +384,7 @@ iam-base.yaml:
 - EKS node group IAM role
 
 eks.yaml:
-- EKS cluster (Kubernetes 1.29)
+- EKS cluster (Kubernetes 1.35)
 - Managed node group: t3.medium/t3a.medium Spot Instances, min 1, max 3, desired 2
 - CapacityType: SPOT
 - Output: ClusterName, ClusterEndpoint, OIDCIssuerURL, ClusterSecurityGroupId
@@ -390,7 +394,7 @@ iam-irsa.yaml:
 - Requires OIDCIssuerURL from eks.yaml (deployed after EKS)
 
 rds.yaml:
-- PostgreSQL 15, db.t3.micro, single AZ
+- PostgreSQL 17.5, db.t3.micro, single AZ
 - Private subnets only
 - Security group: allow 5432 from EKS node security group only
 - SkipFinalSnapshot: true (cost control)

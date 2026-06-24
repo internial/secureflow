@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'SecureFlow EKS Cluster Infrastructure (Kubernetes 1.29) and Node Group'
+Description: 'SecureFlow EKS Cluster Infrastructure (Kubernetes 1.35) and Node Group'
 
 Parameters:
   VpcStackName:
@@ -41,7 +41,7 @@ Resources:
     Type: 'AWS::EKS::Cluster'
     Properties:
       Name: 'secureflow-cluster'
-      Version: '1.29'
+      Version: '1.35'
       RoleArn:
         Fn::ImportValue: !Sub '${IamBaseStackName}-EksClusterRoleArn'
       ResourcesVpcConfig:

@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'SecureFlow RDS PostgreSQL 16.4 Instance (Single AZ, db.t3.micro)'
+Description: 'SecureFlow RDS PostgreSQL 17.5 Instance (Single AZ, db.t3.medium)'
 
 Parameters:
   VpcStackName:
@@ -65,15 +65,13 @@ Resources:
         skip:
           - id: CKV_AWS_157
             comment: "Single AZ intentional — demo environment, cost control over redundancy"
-          - id: E3062
-            comment: "db.t3.micro intentional — demo environment, cost control over reserved instances"
     DeletionPolicy: Delete
     Properties:
       DBInstanceIdentifier: 'secureflow-rds'
       DBName: 'secureflow'
       Engine: 'postgres'
-      EngineVersion: '16.4'
-      DBInstanceClass: 'db.t3.micro'
+      EngineVersion: '17.5'
+      DBInstanceClass: 'db.t3.medium'
       AllocatedStorage: '20'
       MasterUsername: !Ref DBUsername
       # Use dynamic reference to Secrets Manager for the password

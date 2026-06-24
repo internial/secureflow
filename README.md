@@ -29,7 +29,7 @@ A 100 virtual user spike test validates the application under load. The same tes
 Three scripted failure scenarios run against the live cluster: pod crash with automatic self-healing, memory pressure with spike detection, and a failed deployment with `helm rollback` recovery. Each prints step-by-step what to observe in Grafana.
 
 **Security (Multiple Layers)**
-git-secrets on commit, CodeQL static analysis on Java code, Trivy container scanning, Checkov and cfn-lint on CloudFormation templates. Every layer is gated in the pipeline — a failure blocks deployment.
+git-secrets on commit, CodeQL static analysis on Java code, Trivy container scanning, Checkov on CloudFormation security, and cfn-lint for template syntax (catalog rules like instance class / engine version are ignored via `.cfnlintrc.yaml`). Failures block deployment.
 
 **Local-First Workflow**
 The entire stack runs on a laptop before anything touches AWS. Docker Compose validates the application. Kind validates Kubernetes. AWS is used only for final demo evidence, then torn down immediately to control costs.

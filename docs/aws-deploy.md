@@ -57,7 +57,7 @@ aws cloudformation create-stack --stack-name secureflow-iam-irsa \
 ```
 
 ### Step 5: Deploy PostgreSQL RDS Database (`rds.yaml`)
-Sets up private PostgreSQL database instance allowing connections from the EKS stack security group.
+Sets up a private PostgreSQL 17.5 instance (`db.t3.micro`, single AZ) allowing connections from the EKS stack security group only.
 ```bash
 aws cloudformation create-stack --stack-name secureflow-rds \
   --template-body file://cloudformation/rds.yaml
@@ -144,3 +144,57 @@ To avoid accumulating ongoing charges after testing or demonstration:
    aws cloudformation delete-stack --stack-name secureflow-iam-base
    aws cloudformation delete-stack --stack-name secureflow-vpc
    ```
+
+---
+
+## Part 5: CI/CD Deployment & Troubleshooting
+
+The GitHub Actions `deploy-infrastructure` job deploys all stacks automatically on every push to `main`. If a stack fails, the workflow prints the real AWS error — not just `ROLLBACK_COMPLETE`.
+
+### What you see when a stack fails
+
+On create or update failure, the pipeline logs:
+
+1. **Stack status** — e.g. `ROLLBACK_COMPLETE`
+2. **Failed resources** — logical ID, resource type, and `ResourceStatusReason`
+3. **Recent stack events** — last 15 events with timestamps
+
+Look for lines like `Resource handler returned message:` — that is the actual fix target (quota, IAM, subnet, unsupported instance type, etc.).
+
+### Stuck in `ROLLBACK_COMPLETE`
+
+If a stack previously failed, it may be left in `ROLLBACK_COMPLETE`. The pipeline will stop, print the failure events, and suggest:
+
+```bash
+aws cloudformation delete-stack --stack-name secureflow-eks
+aws cloudformation wait stack-delete-complete --stack-name secureflow-eks
+```
+
+Replace `secureflow-eks` with the failed stack name (`secureflow-vpc`, `secureflow-rds`, etc.), then re-run the workflow.
+
+### Manual debugging (same commands the pipeline uses)
+
+```bash
+# Stack status
+aws cloudformation describe-stacks --stack-name secureflow-eks \
+  --query 'Stacks[0].[StackStatus,StackStatusReason]' --output text
+
+# Failed resources only
+aws cloudformation describe-stack-events --stack-name secureflow-eks \
+  --query 'StackEvents[?contains(ResourceStatus, `FAILED`)].[LogicalResourceId,ResourceStatusReason]' \
+  --output table
+
+# Last 15 events
+aws cloudformation describe-stack-events --stack-name secureflow-eks --max-items 15 --output table
+```
+
+### Infrastructure security scans (before deploy)
+
+The `checkov-cfnlint` job runs before deployment:
+
+| Tool | Role |
+|------|------|
+| **Checkov** | Security policies (encryption, public access, IAM, etc.) — failures block deploy |
+| **cfn-lint** | Template syntax and structure — configured via `.cfnlintrc.yaml` to ignore AWS catalog noise (instance class / engine version lists). Only **errors** fail CI; warnings are logged only. |
+
+Common cfn-lint rules intentionally ignored for this demo project: `E3062` (RDS instance class catalog), `W3691` (deprecated Postgres minor versions).

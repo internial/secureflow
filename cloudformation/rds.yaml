@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'SecureFlow RDS PostgreSQL 16 Instance (Single AZ, db.t3.micro)'
+Description: 'SecureFlow RDS PostgreSQL 16.3 Instance (Single AZ, db.t3.micro)'
 
 Parameters:
   VpcStackName:
@@ -70,7 +70,7 @@ Resources:
       DBInstanceIdentifier: 'secureflow-rds'
       DBName: 'secureflow'
       Engine: 'postgres'
-      EngineVersion: '16'
+      EngineVersion: '16.3'
       DBInstanceClass: 'db.t3.micro'
       AllocatedStorage: '20'
       MasterUsername: !Ref DBUsername

@@ -141,6 +141,31 @@ jobs:
 
       - name: Deploy or Update CloudFormation Stacks
         run: |
+          print_stack_events() {
+            local stack_name=$1
+            echo ""
+            echo "══════════════════════════════════════════════════════════════"
+            echo "❌ CloudFormation failure details for stack: $stack_name"
+            echo "══════════════════════════════════════════════════════════════"
+            aws cloudformation describe-stacks \
+              --stack-name "$stack_name" \
+              --query 'Stacks[0].[StackStatus,StackStatusReason]' \
+              --output text 2>/dev/null || true
+            echo ""
+            echo "Failed resources:"
+            aws cloudformation describe-stack-events \
+              --stack-name "$stack_name" \
+              --query 'StackEvents[?contains(ResourceStatus, `FAILED`)].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]' \
+              --output table 2>/dev/null || true
+            echo ""
+            echo "Recent stack events:"
+            aws cloudformation describe-stack-events \
+              --stack-name "$stack_name" \
+              --max-items 15 \
+              --query 'StackEvents[*].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+              --output table 2>/dev/null || true
+          }
+
           deploy_stack() {
             local stack_name=$1
             local template=$2
@@ -154,20 +179,44 @@ jobs:
 
             if [ "$status" = "DOES_NOT_EXIST" ]; then
               echo "Creating stack: $stack_name"
-              aws cloudformation create-stack \
+              if ! aws cloudformation create-stack \
                 --stack-name "$stack_name" \
                 --template-body "file://$template" \
-                "${extra_args[@]}"
-              aws cloudformation wait stack-create-complete --stack-name "$stack_name"
+                "${extra_args[@]}"; then
+                echo "❌ create-stack command failed for $stack_name"
+                exit 1
+              fi
+              if ! aws cloudformation wait stack-create-complete --stack-name "$stack_name"; then
+                print_stack_events "$stack_name"
+                exit 1
+              fi
               echo "✅ $stack_name created"
             elif [ "$status" = "CREATE_COMPLETE" ] || [ "$status" = "UPDATE_COMPLETE" ] || [ "$status" = "UPDATE_ROLLBACK_COMPLETE" ]; then
               echo "Updating stack: $stack_name"
-              aws cloudformation update-stack \
+              update_output=$(aws cloudformation update-stack \
                 --stack-name "$stack_name" \
                 --template-body "file://$template" \
-                "${extra_args[@]}" 2>&1 | grep -v "No updates are to be performed" || true
-              aws cloudformation wait stack-update-complete --stack-name "$stack_name" 2>/dev/null || true
-              echo "✅ $stack_name up to date"
+                "${extra_args[@]}" 2>&1) || {
+                if echo "$update_output" | grep -q "No updates are to be performed"; then
+                  echo "✅ $stack_name — no changes"
+                  return 0
+                fi
+                echo "$update_output"
+                print_stack_events "$stack_name"
+                exit 1
+              }
+              if ! aws cloudformation wait stack-update-complete --stack-name "$stack_name"; then
+                print_stack_events "$stack_name"
+                exit 1
+              fi
+              echo "✅ $stack_name updated"
+            elif [ "$status" = "ROLLBACK_COMPLETE" ]; then
+              echo "❌ Stack $stack_name is in ROLLBACK_COMPLETE from a previous failed deploy"
+              print_stack_events "$stack_name"
+              echo ""
+              echo "Delete the stack in AWS Console or run:"
+              echo "  aws cloudformation delete-stack --stack-name $stack_name"
+              exit 1
             else
               echo "⚠️ Stack $stack_name is in state $status — skipping"
             fi

@@ -17,17 +17,27 @@ Resources:
     Properties:
       RoleName: 'secureflow-app-irsa-role'
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Federated: !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/${OidcProvider}'
-            Action: 'sts:AssumeRoleWithWebIdentity'
-            Condition:
-              StringEquals:
-                # Use Fn::Sub with a map to avoid YAML parsing issues with dynamic keys
-                Fn::Sub: '${OidcProvider}:sub'
-                Value: 'system:serviceaccount:secureflow:secureflow-sa'
+        Fn::Sub:
+          - |
+            {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Federated": "arn:aws:iam::${AWS::AccountId}:oidc-provider/${OidcProvider}"
+                  },
+                  "Action": "sts:AssumeRoleWithWebIdentity",
+                  "Condition": {
+                    "StringEquals": {
+                      "${OidcProvider}:sub": "system:serviceaccount:secureflow:secureflow-sa",
+                      "${OidcProvider}:aud": "sts.amazonaws.com"
+                    }
+                  }
+                }
+              ]
+            }
+          - OidcProvider: !Ref OidcProvider
 
   AppIrsaPolicy:
     Type: 'AWS::IAM::Policy'

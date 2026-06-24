@@ -119,8 +119,7 @@ secureflow/
 ├── README.md
 └── .gitignore
 
-NOTE: k6-baseline.js has been removed. A single reusable k6-spike.js is used
-across both local environments and AWS.
+
 
 ------------------------------------------------------------
 PHASE 1 — SPRING BOOT APPLICATION (GENERATE FULL CODE)

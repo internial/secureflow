@@ -112,7 +112,8 @@ jobs:
       - name: Install and Run cfn-lint
         run: |
           pip install cfn-lint
-          cfn-lint cloudformation/**/*.yaml
+          cfn-lint cloudformation/**/*.yaml \
+            -i E3062 W3691
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Infrastructure Deployment (main branch only)

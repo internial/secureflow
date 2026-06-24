@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'SecureFlow RDS PostgreSQL 17.5 Instance (Single AZ, db.t3.medium)'
+Description: 'SecureFlow RDS PostgreSQL 17.5 Instance (Single AZ, db.t3.micro)'
 
 Parameters:
   VpcStackName:
@@ -71,7 +71,7 @@ Resources:
       DBName: 'secureflow'
       Engine: 'postgres'
       EngineVersion: '17.5'
-      DBInstanceClass: 'db.t3.medium'
+      DBInstanceClass: 'db.t3.micro'
       AllocatedStorage: '20'
       MasterUsername: !Ref DBUsername
       # Use dynamic reference to Secrets Manager for the password

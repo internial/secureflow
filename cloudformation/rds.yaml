@@ -66,6 +66,11 @@ Resources:
 
   RDSInstance:
     Type: 'AWS::RDS::DBInstance'
+    Metadata:
+      checkov:
+        skip:
+          - id: CKV_AWS_157
+            comment: "Single AZ intentional — demo environment, cost control over redundancy"
     Properties:
       DBInstanceIdentifier: 'secureflow-rds'
       DBName: 'secureflow'

@@ -23,7 +23,8 @@ jobs:
 
       - name: git-secrets Secret Scan
         run: |
-          pip install git-secrets
+          git clone https://github.com/awslabs/git-secrets.git /tmp/git-secrets
+          sudo make install -C /tmp/git-secrets
           git-secrets --register-aws
           if [ -f .git-secrets ]; then
             while IFS= read -r pattern; do

@@ -194,6 +194,12 @@ jobs:
             --parameters "ParameterKey=OidcProvider,ParameterValue=$OIDC_URL"
 
           # 5. RDS (depends on VPC + EKS security group)
+          # Create the DB password SSM parameter if it doesn't exist
+          aws ssm put-parameter \
+            --name /secureflow/db/password \
+            --value secureflow \
+            --type SecureString \
+            --overwrite 2>/dev/null || true
           deploy_stack secureflow-rds cloudformation/rds.yaml
 
           # 6. ECR

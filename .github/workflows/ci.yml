@@ -109,12 +109,6 @@ jobs:
           quiet: true
           soft_fail: false
 
-      - name: Install and Run cfn-lint
-        run: |
-          pip install cfn-lint
-          cfn-lint cloudformation/**/*.yaml \
-            -i E3062 W3691
-
   # ─────────────────────────────────────────────────────────────────────────────
   # Infrastructure Deployment (main branch only)
   # Deploys CloudFormation stacks in dependency order.

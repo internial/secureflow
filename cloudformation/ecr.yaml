@@ -2,12 +2,30 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'SecureFlow ECR Registry: Docker Repository with Image Scans and Lifecycle Rules'
 
 Resources:
+  EcrKmsKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: 'KMS key for ECR repository encryption'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+
   EcrRepository:
     Type: 'AWS::ECR::Repository'
     Properties:
       RepositoryName: 'secureflow'
       ImageScanningConfiguration:
         ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+      EncryptionConfiguration:
+        EncryptionType: KMS
+        KmsKey: !Ref EcrKmsKey
       LifecyclePolicy:
         LifecyclePolicyText: |
           {

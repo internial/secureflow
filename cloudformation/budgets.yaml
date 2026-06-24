@@ -5,13 +5,35 @@ Parameters:
   NotificationEmail:
     Type: String
     Default: 'PLACEHOLDER_EMAIL@example.com'
-    Description: 'Email address to receive cost alert notifications (Please update this value)'
+    Description: 'Email address to receive cost alert notifications'
 
 Resources:
+  SnsKmsKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: 'KMS key for SNS topic encryption'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Effect: Allow
+            Principal:
+              Service: 'budgets.amazonaws.com'
+            Action:
+              - 'kms:GenerateDataKey'
+              - 'kms:Decrypt'
+            Resource: '*'
+
   BudgetSnsTopic:
     Type: 'AWS::SNS::Topic'
     Properties:
       TopicName: 'secureflow-budget-alerts-topic'
+      KmsMasterKeyId: !Ref SnsKmsKey
       Subscription:
         - Endpoint: !Ref NotificationEmail
           Protocol: 'email'
@@ -42,44 +64,40 @@ Resources:
           Amount: 50
           Unit: 'USD'
       NotificationsWithSubscribers:
-        # Alert 1: Early Warning ($2 actual)
         - Notification:
             ComparisonOperator: 'GREATER_THAN'
             NotificationType: 'ACTUAL'
-            Threshold: 4 # 4% of $50 = $2
+            Threshold: 4
             ThresholdType: 'PERCENTAGE'
           Subscribers:
             - Address: !Ref NotificationEmail
               SubscriptionType: 'EMAIL'
             - Address: !Ref BudgetSnsTopic
               SubscriptionType: 'SNS'
-        # Alert 2: Urgent ($5 actual)
         - Notification:
             ComparisonOperator: 'GREATER_THAN'
             NotificationType: 'ACTUAL'
-            Threshold: 10 # 10% of $50 = $5
+            Threshold: 10
             ThresholdType: 'PERCENTAGE'
           Subscribers:
             - Address: !Ref NotificationEmail
               SubscriptionType: 'EMAIL'
             - Address: !Ref BudgetSnsTopic
               SubscriptionType: 'SNS'
-        # Alert 3: Critical ($10 actual)
         - Notification:
             ComparisonOperator: 'GREATER_THAN'
             NotificationType: 'ACTUAL'
-            Threshold: 20 # 20% of $50 = $10
+            Threshold: 20
             ThresholdType: 'PERCENTAGE'
           Subscribers:
             - Address: !Ref NotificationEmail
               SubscriptionType: 'EMAIL'
             - Address: !Ref BudgetSnsTopic
               SubscriptionType: 'SNS'
-        # Alert 4: Forecasted ($15 forecasted)
         - Notification:
             ComparisonOperator: 'GREATER_THAN'
             NotificationType: 'FORECASTED'
-            Threshold: 30 # 30% of $50 = $15
+            Threshold: 30
             ThresholdType: 'PERCENTAGE'
           Subscribers:
             - Address: !Ref NotificationEmail

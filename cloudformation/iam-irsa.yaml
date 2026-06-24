@@ -25,7 +25,9 @@ Resources:
             Action: 'sts:AssumeRoleWithWebIdentity'
             Condition:
               StringEquals:
-                !Sub '${OidcProvider}:sub': 'system:serviceaccount:secureflow:secureflow-sa'
+                # Use Fn::Sub with a map to avoid YAML parsing issues with dynamic keys
+                Fn::Sub: '${OidcProvider}:sub'
+                Value: 'system:serviceaccount:secureflow:secureflow-sa'
 
   AppIrsaPolicy:
     Type: 'AWS::IAM::Policy'

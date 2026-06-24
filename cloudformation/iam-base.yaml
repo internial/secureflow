@@ -36,6 +36,20 @@ Resources:
         - 'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy'
         - 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly'
 
+  RdsMonitoringRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'rds-monitoring-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'monitoring.rds.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
+
 Outputs:
   EksClusterRoleArn:
     Value: !GetAtt EksClusterRole.Arn
@@ -45,3 +59,7 @@ Outputs:
     Value: !GetAtt EksNodeRole.Arn
     Export:
       Name: !Sub '${AWS::StackName}-EksNodeRoleArn'
+  RdsMonitoringRoleArn:
+    Value: !GetAtt RdsMonitoringRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RdsMonitoringRoleArn'

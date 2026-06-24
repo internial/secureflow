@@ -7,10 +7,10 @@ Parameters:
     Default: 'secureflow-vpc'
     Description: 'Name of the VPC stack to import subnet and network values'
 
-  EksStackName:
+  IamBaseStackName:
     Type: String
-    Default: 'secureflow-eks'
-    Description: 'Name of the EKS stack to import cluster node security groups'
+    Default: 'secureflow-iam-base'
+    Description: 'Name of the IAM Base stack to import the RDS monitoring role ARN'
 
   DBUsername:
     Type: String
@@ -24,6 +24,20 @@ Parameters:
     Description: 'Password for the Database'
 
 Resources:
+  RdsKmsKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: 'KMS key for RDS encryption at rest'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+
   DBSubnetGroup:
     Type: 'AWS::RDS::DBSubnetGroup'
     Properties:
@@ -36,16 +50,16 @@ Resources:
   DBSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: 'Allow port 5432 ingress from EKS Node Security Group'
+      GroupDescription: 'Allow PostgreSQL port 5432 ingress from EKS nodes only'
       VpcId:
         Fn::ImportValue: !Sub '${VpcStackName}-VpcId'
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
-          # Restrict to EKS node security group to ensure database security
+          Description: 'PostgreSQL access from EKS node security group'
           SourceSecurityGroupId:
-            Fn::ImportValue: !Sub '${EksStackName}-ClusterSecurityGroupId'
+            Fn::ImportValue: !Sub 'secureflow-eks-ClusterSecurityGroupId'
       Tags:
         - Key: Name
           Value: 'secureflow-rds-sg'
@@ -64,9 +78,19 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref DBSecurityGroup
+      # Single AZ to minimize cost — this is a demo environment
       MultiAZ: false
       PubliclyAccessible: false
       StorageType: 'gp2'
+      # Encryption at rest
+      StorageEncrypted: true
+      KmsKeyId: !Ref RdsKmsKey
+      # Enhanced monitoring
+      MonitoringInterval: 60
+      MonitoringRoleArn:
+        Fn::ImportValue: !Sub '${IamBaseStackName}-RdsMonitoringRoleArn'
+      # Enable IAM authentication
+      EnableIAMDatabaseAuthentication: true
       SkipFinalSnapshot: true
       Tags:
         - Key: Name

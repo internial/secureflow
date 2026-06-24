@@ -109,6 +109,11 @@ jobs:
           quiet: true
           soft_fail: false
 
+      - name: Install and Run cfn-lint
+        run: |
+          pip install cfn-lint
+          cfn-lint cloudformation/**/*.yaml --non-zero-exit-code error
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Infrastructure Deployment (main branch only)
   # Deploys CloudFormation stacks in dependency order.

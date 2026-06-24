@@ -1,0 +1,5 @@
+ignore_checks:
+  - E3062   # RDS instance class catalog — demo cost choice, not a template bug
+  - W3691   # deprecated Postgres minor versions — AWS housekeeping, not security
+  - W2001   # unused parameters
+  - W3005   # redundant DependsOn when Ref already enforces dependency

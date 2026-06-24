@@ -65,6 +65,8 @@ Resources:
         skip:
           - id: CKV_AWS_157
             comment: "Single AZ intentional — demo environment, cost control over redundancy"
+          - id: E3062
+            comment: "db.t3.micro intentional — demo environment, cost control over reserved instances"
     DeletionPolicy: Delete
     Properties:
       DBInstanceIdentifier: 'secureflow-rds'

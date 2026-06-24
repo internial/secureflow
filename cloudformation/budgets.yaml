@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SecureFlow AWS Budget Alerts: Actual and Forecasted cost protection alarms'
+
+Parameters:
+  NotificationEmail:
+    Type: String
+    Default: 'PLACEHOLDER_EMAIL@example.com'
+    Description: 'Email address to receive cost alert notifications (Please update this value)'
+
+Resources:
+  BudgetSnsTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      TopicName: 'secureflow-budget-alerts-topic'
+      Subscription:
+        - Endpoint: !Ref NotificationEmail
+          Protocol: 'email'
+
+  BudgetSnsTopicPolicy:
+    Type: 'AWS::SNS::TopicPolicy'
+    Properties:
+      Topics:
+        - !Ref BudgetSnsTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'budgets.amazonaws.com'
+            Action: 'sns:Publish'
+            Resource: !Ref BudgetSnsTopic
+
+  SecureFlowBudget:
+    Type: 'AWS::Budgets::Budget'
+    DependsOn: BudgetSnsTopicPolicy
+    Properties:
+      Budget:
+        BudgetName: 'secureflow-sre-budget'
+        BudgetType: 'COST'
+        TimeUnit: 'MONTHLY'
+        BudgetLimit:
+          Amount: 50
+          Unit: 'USD'
+      NotificationsWithSubscribers:
+        # Alert 1: Early Warning ($2 actual)
+        - Notification:
+            ComparisonOperator: 'GREATER_THAN'
+            NotificationType: 'ACTUAL'
+            Threshold: 4 # 4% of $50 = $2
+            ThresholdType: 'PERCENTAGE'
+          Subscribers:
+            - Address: !Ref NotificationEmail
+              SubscriptionType: 'EMAIL'
+            - Address: !Ref BudgetSnsTopic
+              SubscriptionType: 'SNS'
+        # Alert 2: Urgent ($5 actual)
+        - Notification:
+            ComparisonOperator: 'GREATER_THAN'
+            NotificationType: 'ACTUAL'
+            Threshold: 10 # 10% of $50 = $5
+            ThresholdType: 'PERCENTAGE'
+          Subscribers:
+            - Address: !Ref NotificationEmail
+              SubscriptionType: 'EMAIL'
+            - Address: !Ref BudgetSnsTopic
+              SubscriptionType: 'SNS'
+        # Alert 3: Critical ($10 actual)
+        - Notification:
+            ComparisonOperator: 'GREATER_THAN'
+            NotificationType: 'ACTUAL'
+            Threshold: 20 # 20% of $50 = $10
+            ThresholdType: 'PERCENTAGE'
+          Subscribers:
+            - Address: !Ref NotificationEmail
+              SubscriptionType: 'EMAIL'
+            - Address: !Ref BudgetSnsTopic
+              SubscriptionType: 'SNS'
+        # Alert 4: Forecasted ($15 forecasted)
+        - Notification:
+            ComparisonOperator: 'GREATER_THAN'
+            NotificationType: 'FORECASTED'
+            Threshold: 30 # 30% of $50 = $15
+            ThresholdType: 'PERCENTAGE'
+          Subscribers:
+            - Address: !Ref NotificationEmail
+              SubscriptionType: 'EMAIL'
+            - Address: !Ref BudgetSnsTopic
+              SubscriptionType: 'SNS'
+
+Outputs:
+  BudgetName:
+    Value: !Ref SecureFlowBudget
+  SnsTopicArn:
+    Value: !Ref BudgetSnsTopic

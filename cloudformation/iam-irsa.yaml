@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SecureFlow IAM Role for Service Accounts (IRSA): Trust and App Pod Role'
+
+Parameters:
+  EksStackName:
+    Type: String
+    Default: 'secureflow-eks'
+    Description: 'Name of the EKS stack to import details'
+
+  OidcProvider:
+    Type: String
+    Description: 'EKS cluster OIDC Provider (e.g. oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E)'
+
+Resources:
+  AppIrsaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'secureflow-app-irsa-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/${OidcProvider}'
+            Action: 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                !Sub '${OidcProvider}:sub': 'system:serviceaccount:secureflow:secureflow-sa'
+
+  AppIrsaPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: 'secureflow-app-irsa-policy'
+      Roles:
+        - !Ref AppIrsaRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'secretsmanager:GetSecretValue'
+              - 'secretsmanager:DescribeSecret'
+            Resource: '*'
+
+Outputs:
+  AppIrsaRoleArn:
+    Value: !GetAtt AppIrsaRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AppIrsaRoleArn'

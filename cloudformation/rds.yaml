@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SecureFlow RDS PostgreSQL 15 Instance (Single AZ, db.t3.micro)'
+
+Parameters:
+  VpcStackName:
+    Type: String
+    Default: 'secureflow-vpc'
+    Description: 'Name of the VPC stack to import subnet and network values'
+
+  EksStackName:
+    Type: String
+    Default: 'secureflow-eks'
+    Description: 'Name of the EKS stack to import cluster node security groups'
+
+  DBUsername:
+    Type: String
+    Default: 'secureflow'
+    Description: 'Username for the Database'
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Default: 'secureflow'
+    Description: 'Password for the Database'
+
+Resources:
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: 'Subnets available for the RDS instance'
+      SubnetIds:
+        Fn::Split:
+          - ','
+          - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnets'
+
+  DBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Allow port 5432 ingress from EKS Node Security Group'
+      VpcId:
+        Fn::ImportValue: !Sub '${VpcStackName}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          # Restrict to EKS node security group to ensure database security
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub '${EksStackName}-ClusterSecurityGroupId'
+      Tags:
+        - Key: Name
+          Value: 'secureflow-rds-sg'
+
+  RDSInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBInstanceIdentifier: 'secureflow-rds'
+      DBName: 'secureflow'
+      Engine: 'postgres'
+      EngineVersion: '15'
+      DBInstanceClass: 'db.t3.micro'
+      AllocatedStorage: '20'
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      MultiAZ: false
+      PubliclyAccessible: false
+      StorageType: 'gp2'
+      SkipFinalSnapshot: true
+      Tags:
+        - Key: Name
+          Value: 'secureflow-db'
+
+Outputs:
+  RDSEndpoint:
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSEndpoint'

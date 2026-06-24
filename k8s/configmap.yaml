@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: secureflow-config
+  namespace: secureflow
+data:
+  # Comment: Override this database URL for EKS deployments with the actual RDS endpoint (e.g., jdbc:postgresql://<rds-endpoint>:5432/secureflow)
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/secureflow"

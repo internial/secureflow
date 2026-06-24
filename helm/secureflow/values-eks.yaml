@@ -1,0 +1,22 @@
+# Helm values override file for AWS EKS environment
+# image.repository and db.url are injected at deploy time by GitHub Actions.
+# Do not set real values here — they are resolved from CloudFormation outputs.
+replicaCount: 2
+
+image:
+  repository: "INJECTED_BY_PIPELINE"
+  tag: "latest"
+
+db:
+  url: "INJECTED_BY_PIPELINE"
+  username: "secureflow"
+  password: "secureflow"
+
+ingress:
+  enabled: true
+  className: "alb"
+  host: ""
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip

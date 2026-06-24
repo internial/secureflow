@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "secureflow.fullname" . }}-config
+  labels:
+    {{- include "secureflow.labels" . | nindent 4 }}
+data:
+  SPRING_DATASOURCE_URL: {{ .Values.db.url | quote }}

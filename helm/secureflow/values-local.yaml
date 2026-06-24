@@ -1,0 +1,19 @@
+# Helm values override file for local Kind cluster setup
+replicaCount: 2
+
+image:
+  repository: secureflow-api
+  tag: "latest"
+
+db:
+  url: "jdbc:postgresql://postgres:5432/secureflow"
+  username: "secureflow"
+  password: "secureflow"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  host: "localhost"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"

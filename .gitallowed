@@ -1,0 +1,7 @@
+# False positives — local dev connection strings and example values only
+jdbc:postgresql://postgres:5432/secureflow
+jdbc:postgresql://
+arn:aws:iam::aws:policy/
+EXAMPLED539D4633E53DE1B716D3041E
+secureflow-rds\.c[0-9a-z]+\.us-east-1\.rds\.amazonaws\.com
+SPRING_DATASOURCE_URL

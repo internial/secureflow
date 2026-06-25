@@ -151,7 +151,12 @@ jobs:
             --capabilities CAPABILITY_NAMED_IAM \
             --parameters "ParameterKey=OidcProvider,ParameterValue=$OIDC_URL"
 
-          # 5. RDS (depends on VPC + EKS security group)
+          # 5. ALB Controller IAM (depends on EKS OIDC)
+          deploy_stack secureflow-alb-controller cloudformation/alb-controller.yaml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameters "ParameterKey=OidcProvider,ParameterValue=$OIDC_URL"
+
+          # 6. RDS (depends on VPC + EKS security group)
           aws ssm put-parameter \
             --name /secureflow/db/password \
             --value secureflow \
@@ -159,9 +164,54 @@ jobs:
             --overwrite 2>/dev/null || true
           deploy_stack secureflow-rds cloudformation/rds.yaml
 
-          # 6. ECR
+          # 7. ECR
           deploy_stack secureflow-ecr cloudformation/ecr.yaml
 
-          # 7. Budgets
+          # 8. Budgets
           deploy_stack secureflow-budgets cloudformation/budgets.yaml \
             --parameters "ParameterKey=NotificationEmail,ParameterValue=${{ secrets.NOTIFICATION_EMAIL }}"
+
+  install-alb-controller:
+    name: Install AWS Load Balancer Controller
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig --name secureflow-cluster --region ${{ secrets.AWS_REGION }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Install or Upgrade ALB Controller
+        run: |
+          ALB_ROLE_ARN=$(aws cloudformation describe-stacks \
+            --stack-name secureflow-alb-controller \
+            --query "Stacks[0].Outputs[?OutputKey=='AlbControllerIrsaRoleArn'].OutputValue" \
+            --output text)
+          VPC_ID=$(aws eks describe-cluster --name secureflow-cluster \
+            --query 'cluster.resourcesVpcConfig.vpcId' --output text)
+
+          helm repo add eks https://aws.github.io/eks-charts 2>/dev/null || true
+          helm repo update eks
+          helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            --namespace kube-system \
+            --set clusterName=secureflow-cluster \
+            --set serviceAccount.create=true \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$ALB_ROLE_ARN \
+            --set region=${{ secrets.AWS_REGION }} \
+            --set vpcId=$VPC_ID

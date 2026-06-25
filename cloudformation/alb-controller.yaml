@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SecureFlow ALB Controller IAM Policy and IRSA Role'
+
+Parameters:
+  EksStackName:
+    Type: String
+    Default: 'secureflow-eks'
+    Description: 'Name of the EKS stack to import details'
+
+  OidcProvider:
+    Type: String
+    Description: 'EKS cluster OIDC Provider (e.g. oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E)'
+
+Resources:
+  AlbControllerPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      ManagedPolicyName: 'secureflow-alb-controller-policy'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'acm:DescribeCertificate'
+              - 'acm:ListCertificates'
+              - 'acm:GetCertificate'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'ec2:AuthorizeSecurityGroupIngress'
+              - 'ec2:CreateSecurityGroup'
+              - 'ec2:CreateTags'
+              - 'ec2:DeleteTags'
+              - 'ec2:DeleteSecurityGroup'
+              - 'ec2:DescribeAccountAttributes'
+              - 'ec2:DescribeAddresses'
+              - 'ec2:DescribeAvailabilityZones'
+              - 'ec2:DescribeInstances'
+              - 'ec2:DescribeInstanceTypes'
+              - 'ec2:DescribeInternetGateways'
+              - 'ec2:DescribeNetworkInterfaces'
+              - 'ec2:DescribeSecurityGroupReferences'
+              - 'ec2:DescribeSecurityGroupRules'
+              - 'ec2:DescribeSecurityGroups'
+              - 'ec2:DescribeSubnets'
+              - 'ec2:DescribeTags'
+              - 'ec2:DescribeVpcPeeringConnections'
+              - 'ec2:DescribeVpcs'
+              - 'ec2:GetSecurityGroupForVpc'
+              - 'ec2:ModifyNetworkInterfaceAttribute'
+              - 'ec2:RevokeSecurityGroupIngress'
+              - 'ec2:UnassignPrivateIpAddresses'
+              - 'ec2:AssignPrivateIpAddresses'
+              - 'ec2:DescribePrefixLists'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'elasticloadbalancing:AddListenerCertificates'
+              - 'elasticloadbalancing:AddTags'
+              - 'elasticloadbalancing:CreateListener'
+              - 'elasticloadbalancing:CreateLoadBalancer'
+              - 'elasticloadbalancing:CreateRule'
+              - 'elasticloadbalancing:CreateTargetGroup'
+              - 'elasticloadbalancing:DeleteListener'
+              - 'elasticloadbalancing:DeleteLoadBalancer'
+              - 'elasticloadbalancing:DeleteRule'
+              - 'elasticloadbalancing:DeleteTargetGroup'
+              - 'elasticloadbalancing:DeregisterTargets'
+              - 'elasticloadbalancing:DescribeListenerAttributes'
+              - 'elasticloadbalancing:DescribeListenerCertificates'
+              - 'elasticloadbalancing:DescribeListeners'
+              - 'elasticloadbalancing:DescribeLoadBalancerAttributes'
+              - 'elasticloadbalancing:DescribeLoadBalancers'
+              - 'elasticloadbalancing:DescribeRules'
+              - 'elasticloadbalancing:DescribeSSLPolicies'
+              - 'elasticloadbalancing:DescribeTags'
+              - 'elasticloadbalancing:DescribeTargetGroupAttributes'
+              - 'elasticloadbalancing:DescribeTargetGroups'
+              - 'elasticloadbalancing:DescribeTargetHealth'
+              - 'elasticloadbalancing:GetTrustStoreUri'
+              - 'elasticloadbalancing:DescribeTrustStores'
+              - 'elasticloadbalancing:ModifyListener'
+              - 'elasticloadbalancing:ModifyLoadBalancerAttributes'
+              - 'elasticloadbalancing:ModifyRule'
+              - 'elasticloadbalancing:ModifyTargetGroup'
+              - 'elasticloadbalancing:ModifyTargetGroupAttributes'
+              - 'elasticloadbalancing:RegisterTargets'
+              - 'elasticloadbalancing:RemoveListenerCertificates'
+              - 'elasticloadbalancing:RemoveTags'
+              - 'elasticloadbalancing:SetIpAddressType'
+              - 'elasticloadbalancing:SetSecurityGroups'
+              - 'elasticloadbalancing:SetSubnets'
+              - 'elasticloadbalancing:SetWebACL'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'iam:CreateServiceLinkedRole'
+              - 'iam:GetServerCertificate'
+              - 'iam:ListServerCertificates'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'cognito-idp:DescribeUserPoolClient'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'waf-regional:GetWebACLForResource'
+              - 'waf-regional:GetWebACL'
+              - 'waf-regional:AssociateWebACL'
+              - 'waf-regional:DisassociateWebACL'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'shield:DescribeProtection'
+              - 'shield:GetSubscriptionState'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'tag:GetResources'
+              - 'tag:TagResources'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'wafv2:GetWebACL'
+              - 'wafv2:GetWebACLForResource'
+              - 'wafv2:AssociateWebACL'
+              - 'wafv2:DisassociateWebACL'
+            Resource: '*'
+
+  AlbControllerIrsaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'secureflow-alb-controller-irsa-role'
+      AssumeRolePolicyDocument:
+        Fn::Sub:
+          - |
+            {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Federated": "arn:aws:iam::${AWS::AccountId}:oidc-provider/${OidcProvider}"
+                  },
+                  "Action": "sts:AssumeRoleWithWebIdentity",
+                  "Condition": {
+                    "StringEquals": {
+                      "${OidcProvider}:sub": "system:serviceaccount:kube-system:aws-load-balancer-controller",
+                      "${OidcProvider}:aud": "sts.amazonaws.com"
+                    }
+                  }
+                }
+              ]
+            }
+          - OidcProvider: !Ref OidcProvider
+
+  AlbControllerIrsaPolicyAttachment:
+    Type: 'AWS::IAM::RolePolicyAttachment'
+    Properties:
+      RoleName: !Ref AlbControllerIrsaRole
+      PolicyArn: !Ref AlbControllerPolicy
+
+Outputs:
+  AlbControllerIrsaRoleArn:
+    Value: !GetAtt AlbControllerIrsaRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AlbControllerIrsaRoleArn'

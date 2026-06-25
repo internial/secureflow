@@ -17,15 +17,15 @@ if [ -t 0 ]; then
 fi
 
 echo ""
-echo "[1/6] Uninstalling Helm release (removes ALB, services, pods)..."
+echo "[1/7] Uninstalling Helm release (removes ALB, services, pods)..."
 helm uninstall secureflow -n secureflow || true
 
 echo ""
-echo "[2/6] Force-deleting ECR repository to clean up images..."
+echo "[2/7] Force-deleting ECR repository to clean up images..."
 aws ecr delete-repository --repository-name secureflow --force || true
 
 echo ""
-echo "[3/6] Initiating parallel deletion of secureflow-budgets, secureflow-ecr, secureflow-rds, and secureflow-iam-irsa..."
+echo "[3/7] Initiating parallel deletion of secureflow-budgets, secureflow-ecr, secureflow-rds, and secureflow-iam-irsa..."
 aws cloudformation delete-stack --stack-name secureflow-budgets
 aws cloudformation delete-stack --stack-name secureflow-ecr
 aws cloudformation delete-stack --stack-name secureflow-rds
@@ -39,7 +39,12 @@ aws cloudformation wait stack-delete-complete --stack-name secureflow-iam-irsa |
 echo "✅ Budgets, ECR, RDS, and IRSA stacks deleted."
 
 echo ""
-echo "[4/6] Initiating deletion of secureflow-eks (EKS Cluster)..."
+echo "[4/7] Initiating deletion of secureflow-alb-controller (ALB Controller IAM)..."
+aws cloudformation delete-stack --stack-name secureflow-alb-controller
+aws cloudformation wait stack-delete-complete --stack-name secureflow-alb-controller
+echo "✅ ALB Controller stack deleted."
+
+echo "[5/7] Initiating deletion of secureflow-eks (EKS Cluster)..."
 aws cloudformation delete-stack --stack-name secureflow-eks
 
 echo "Waiting for EKS stack deletion (this takes ~10-15 minutes)..."
@@ -47,7 +52,7 @@ aws cloudformation wait stack-delete-complete --stack-name secureflow-eks
 echo "✅ EKS stack deleted."
 
 echo ""
-echo "[5/6] Initiating parallel deletion of secureflow-iam-base and secureflow-vpc..."
+echo "[6/7] Initiating parallel deletion of secureflow-iam-base and secureflow-vpc..."
 aws cloudformation delete-stack --stack-name secureflow-iam-base
 aws cloudformation delete-stack --stack-name secureflow-vpc
 

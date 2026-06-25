@@ -112,17 +112,15 @@ Full-resolution PDF with all screenshots and descriptions:
 - [**Production Run — Screenshots & Details**](docs/production%20run%20pics.pdf)
 - [**Local Run — Screenshots & Details**](docs/local%20run%20pics.pdf)
 
-### Load Test Results (k6 Spike Test — 100 VUs)
+### Load Testing (k6 Spike Test — 100 VUs)
 
-| Metric | Value |
-|---|---|
-| Requests per second | 185.52 |
-| Total requests | 22,302 |
-| Success rate | 100% (0 failures) |
-| Average latency | 39 ms |
-| p95 latency | 99 ms |
-| p99 latency | 99 ms |
-| Max latency | 2.79 s |
+Why: validate that the EKS cluster + ALB handle traffic spikes without errors and that HPA scales pods correctly.
+
+Metrics measured:
+- Requests per second sustained by the ALB
+- Success rate (no failed requests)
+- Average, p95, and p99 response latency
+- HPA replica count scaling behavior under load
 
 ### What's Covered
 

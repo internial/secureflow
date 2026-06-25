@@ -4,6 +4,9 @@
 
 SecureFlow is a cloud-native platform engineering project that demonstrates the full DevOps, DevSecOps, and SRE lifecycle. The application is a simple Spring Boot user management API — the infrastructure, pipelines, security controls, and observability are the actual product.
 
+![System Overview](docs/system-overview.png)
+
+
 Every component is designed to run locally first (Docker Compose and Kind) before touching AWS, keeping costs near zero during development.
 
 ---
@@ -15,6 +18,8 @@ A single `git push main` to GitHub triggers two automated workflows that run in 
 ### CI/CD Pipeline (App Changes)
 
 Triggered when application or Docker files change. Runs these steps in order:
+
+![CI/CD Pipeline](docs/cicd-pipeline.png)
 
 1. **Secret Scan** — Checks the entire repository for accidentally committed AWS credentials or API keys. If found, the pipeline stops immediately.
 2. **Build and Test** — Compiles the Java application and runs all unit tests.
@@ -36,6 +41,8 @@ Triggered when CloudFormation or workflow files change. Runs these steps in orde
 ## AWS Infrastructure — Deployed Automatically
 
 All infrastructure is defined as CloudFormation templates and deployed by the pipeline. The stacks are deployed in this sequence:
+
+![AWS Infrastructure](docs/aws-infrastructure.png)
 
 | Order | Stack Name | What It Creates |
 |---|---|---|

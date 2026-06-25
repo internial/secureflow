@@ -124,5 +124,6 @@ Full-resolution PDF with all screenshots and descriptions:
 
 ### Additional Documents
 
+- [Architecture diagram](docs/architecture.md)
 - [Lessons learned](docs/lessons-learned.md)
 - [Full project specification](docs/spec.md)

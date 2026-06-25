@@ -31,7 +31,6 @@ jobs:
   git-secrets:
     name: git-secrets Secret Scan
     runs-on: ubuntu-latest
-    if: false
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5

@@ -3,8 +3,22 @@ name: SecureFlow CI/CD Pipeline
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'scripts/**'
+      - 'k8s/**'
+      - 'cloudformation/**'
+      - '.github/workflows/infra.yml'
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'scripts/**'
+      - 'k8s/**'
+      - 'cloudformation/**'
+      - '.github/workflows/infra.yml'
 
 permissions:
   contents: read
@@ -95,194 +109,13 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
 
-  checkov-cfnlint:
-    name: Infrastructure Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v5
-
-      - name: Checkov Static Infrastructure Scan
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: cloudformation
-          framework: cloudformation
-          quiet: true
-          soft_fail: false
-
-      - name: Install and Run cfn-lint
-        run: |
-          pip install cfn-lint
-          cfn-lint cloudformation/**/*.yaml --non-zero-exit-code error
-
   # ─────────────────────────────────────────────────────────────────────────────
-  # Infrastructure Deployment (main branch only)
-  # Deploys CloudFormation stacks in dependency order.
-  # Uses create-stack for new stacks and update-stack for existing ones.
-  # Safe to run on every push — skips stacks that are already up to date.
-  # ─────────────────────────────────────────────────────────────────────────────
-  deploy-infrastructure:
-    name: Deploy AWS Infrastructure (CloudFormation)
-    runs-on: ubuntu-latest
-    needs: [codeql, checkov-cfnlint]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    outputs:
-      rds-endpoint: ${{ steps.get-outputs.outputs.rds-endpoint }}
-      oidc-url: ${{ steps.get-outputs.outputs.oidc-url }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v5
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Deploy or Update CloudFormation Stacks
-        run: |
-          print_stack_events() {
-            local stack_name=$1
-            echo ""
-            echo "══════════════════════════════════════════════════════════════"
-            echo "❌ CloudFormation failure details for stack: $stack_name"
-            echo "══════════════════════════════════════════════════════════════"
-            aws cloudformation describe-stacks \
-              --stack-name "$stack_name" \
-              --query 'Stacks[0].[StackStatus,StackStatusReason]' \
-              --output text 2>/dev/null || true
-            echo ""
-            echo "Failed resources:"
-            aws cloudformation describe-stack-events \
-              --stack-name "$stack_name" \
-              --query 'StackEvents[?contains(ResourceStatus, `FAILED`)].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]' \
-              --output table 2>/dev/null || true
-            echo ""
-            echo "Recent stack events:"
-            aws cloudformation describe-stack-events \
-              --stack-name "$stack_name" \
-              --max-items 15 \
-              --query 'StackEvents[*].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
-              --output table 2>/dev/null || true
-          }
-
-          deploy_stack() {
-            local stack_name=$1
-            local template=$2
-            shift 2
-            local extra_args=("$@")
-
-            status=$(aws cloudformation describe-stacks \
-              --stack-name "$stack_name" \
-              --query "Stacks[0].StackStatus" \
-              --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-
-            if [ "$status" = "DOES_NOT_EXIST" ]; then
-              echo "Creating stack: $stack_name"
-              if ! aws cloudformation create-stack \
-                --stack-name "$stack_name" \
-                --template-body "file://$template" \
-                "${extra_args[@]}"; then
-                echo "❌ create-stack command failed for $stack_name"
-                exit 1
-              fi
-              if ! aws cloudformation wait stack-create-complete --stack-name "$stack_name"; then
-                print_stack_events "$stack_name"
-                exit 1
-              fi
-              echo "✅ $stack_name created"
-            elif [ "$status" = "CREATE_COMPLETE" ] || [ "$status" = "UPDATE_COMPLETE" ] || [ "$status" = "UPDATE_ROLLBACK_COMPLETE" ]; then
-              echo "Updating stack: $stack_name"
-              update_output=$(aws cloudformation update-stack \
-                --stack-name "$stack_name" \
-                --template-body "file://$template" \
-                "${extra_args[@]}" 2>&1) || {
-                if echo "$update_output" | grep -q "No updates are to be performed"; then
-                  echo "✅ $stack_name — no changes"
-                  return 0
-                fi
-                echo "$update_output"
-                print_stack_events "$stack_name"
-                exit 1
-              }
-              if ! aws cloudformation wait stack-update-complete --stack-name "$stack_name"; then
-                print_stack_events "$stack_name"
-                exit 1
-              fi
-              echo "✅ $stack_name updated"
-            elif [ "$status" = "ROLLBACK_COMPLETE" ]; then
-              echo "❌ Stack $stack_name is in ROLLBACK_COMPLETE from a previous failed deploy"
-              print_stack_events "$stack_name"
-              echo ""
-              echo "Delete the stack in AWS Console or run:"
-              echo "  aws cloudformation delete-stack --stack-name $stack_name"
-              exit 1
-            else
-              echo "⚠️ Stack $stack_name is in state $status — skipping"
-            fi
-          }
-
-          # 1. VPC
-          deploy_stack secureflow-vpc cloudformation/vpc.yaml
-
-          # 2. IAM Base
-          deploy_stack secureflow-iam-base cloudformation/iam-base.yaml \
-            --capabilities CAPABILITY_NAMED_IAM
-
-          # 3. EKS (depends on VPC + IAM)
-          deploy_stack secureflow-eks cloudformation/eks.yaml
-
-          # 4. IRSA — fetch OIDC URL from EKS stack output
-          OIDC_URL=$(aws cloudformation describe-stacks \
-            --stack-name secureflow-eks \
-            --query "Stacks[0].Outputs[?OutputKey=='OIDCIssuerURL'].OutputValue" \
-            --output text | sed 's|https://||')
-          echo "OIDC URL: $OIDC_URL"
-          deploy_stack secureflow-iam-irsa cloudformation/iam-irsa.yaml \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --parameters "ParameterKey=OidcProvider,ParameterValue=$OIDC_URL"
-
-          # 5. RDS (depends on VPC + EKS security group)
-          # Create the DB password SSM parameter if it doesn't exist
-          aws ssm put-parameter \
-            --name /secureflow/db/password \
-            --value secureflow \
-            --type SecureString \
-            --overwrite 2>/dev/null || true
-          deploy_stack secureflow-rds cloudformation/rds.yaml
-
-          # 6. ECR
-          deploy_stack secureflow-ecr cloudformation/ecr.yaml
-
-          # 7. Budgets
-          deploy_stack secureflow-budgets cloudformation/budgets.yaml \
-            --parameters "ParameterKey=NotificationEmail,ParameterValue=${{ secrets.NOTIFICATION_EMAIL }}"
-
-      - name: Fetch Stack Outputs
-        id: get-outputs
-        run: |
-          RDS_ENDPOINT=$(aws cloudformation describe-stacks \
-            --stack-name secureflow-rds \
-            --query "Stacks[0].Outputs[?OutputKey=='RDSEndpoint'].OutputValue" \
-            --output text)
-          echo "rds-endpoint=$RDS_ENDPOINT" >> $GITHUB_OUTPUT
-
-          OIDC_URL=$(aws cloudformation describe-stacks \
-            --stack-name secureflow-eks \
-            --query "Stacks[0].Outputs[?OutputKey=='OIDCIssuerURL'].OutputValue" \
-            --output text | sed 's|https://||')
-          echo "oidc-url=$OIDC_URL" >> $GITHUB_OUTPUT
-
-          echo "✅ RDS Endpoint: $RDS_ENDPOINT"
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Docker Build & Push to ECR (main branch only, after infra is ready)
+  # Docker Build & Push to ECR (main branch only)
   # ─────────────────────────────────────────────────────────────────────────────
   docker-build-push:
     name: Docker Build & Push to ECR
     runs-on: ubuntu-latest
-    needs: deploy-infrastructure
+    needs: codeql
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: Checkout Code
@@ -347,7 +180,7 @@ jobs:
   deploy-to-eks:
     name: Deploy to EKS via Helm
     runs-on: ubuntu-latest
-    needs: [trivy, deploy-infrastructure]
+    needs: trivy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: Checkout Code
@@ -373,8 +206,12 @@ jobs:
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
           IMAGE_TAG: ${{ github.sha }}
-          RDS_ENDPOINT: ${{ needs.deploy-infrastructure.outputs.rds-endpoint }}
         run: |
+          RDS_ENDPOINT=$(aws cloudformation describe-stacks \
+            --stack-name secureflow-rds \
+            --query "Stacks[0].Outputs[?OutputKey=='RDSEndpoint'].OutputValue" \
+            --output text)
+          
           helm upgrade --install secureflow ./helm/secureflow \
             --namespace secureflow \
             --create-namespace \

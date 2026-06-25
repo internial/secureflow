@@ -1,112 +1,104 @@
-# 🌊 SecureFlow — DevOps, DevSecOps & SRE Portfolio Platform
+# SecureFlow — DevOps, DevSecOps & SRE Portfolio Platform
 
-## What This Project Is
+## Overview
 
-SecureFlow is a production-grade platform engineering project that demonstrates the full DevOps, DevSecOps, and SRE lifecycle in a single repository.
+SecureFlow is a cloud-native platform engineering project that demonstrates the full DevOps, DevSecOps, and SRE lifecycle. The application is a simple Spring Boot user management API — the infrastructure, pipelines, security controls, and observability are the actual product.
 
-The application is intentionally simple — a Spring Boot user management API. The infrastructure, pipelines, security controls, observability, and operational workflows are the product.
-
----
-
-## What I Built
-
-**CI/CD Pipeline (GitHub Actions)**
-A fully automated pipeline triggered on every `git push`. It runs security gates, builds and scans a container image, deploys AWS infrastructure via CloudFormation, and releases the application to EKS via Helm — with zero manual steps.
-
-**AWS Infrastructure as Code (CloudFormation)**
-The entire AWS environment is defined in code: VPC with public/private subnets, EKS cluster with Spot Instance node groups, RDS PostgreSQL, ECR container registry, IAM roles with least-privilege IRSA, and budget alerts. Deployed automatically by the pipeline. Destroyed with a single script.
-
-**Kubernetes & Helm**
-The application is packaged as a Helm chart and deployed to both a local Kind cluster and AWS EKS. Includes Horizontal Pod Autoscaler, readiness/liveness probes, and separate values files per environment.
-
-**Observability Stack**
-Prometheus scrapes live application metrics. Grafana dashboards are provisioned as code. Alert rules cover latency, error rate, CPU, memory, pod health, and deployment failures.
-
-**Load Testing (k6)**
-A 100 virtual user spike test validates the application under load. The same test is reused across environments — against Docker Compose to validate the application, and against Kind/EKS to validate Kubernetes scaling and HPA behaviour.
-
-**SRE Incident Simulations**
-Three scripted failure scenarios run against the live cluster: pod crash with automatic self-healing, memory pressure with spike detection, and a failed deployment with `helm rollback` recovery. Each prints step-by-step what to observe in Grafana.
-
-**Security (Multiple Layers)**
-git-secrets on commit, CodeQL static analysis on Java code, Trivy container scanning, Checkov on CloudFormation security, and cfn-lint for template syntax (catalog rules like instance class / engine version are ignored via `.cfnlintrc.yaml`). Failures block deployment.
-
-**Local-First Workflow**
-The entire stack runs on a laptop before anything touches AWS. Docker Compose validates the application. Kind validates Kubernetes. AWS is used only for final demo evidence, then torn down immediately to control costs.
+Every component is designed to run locally first (Docker Compose and Kind) before touching AWS, keeping costs near zero during development.
 
 ---
 
-**Stack:** Java 21 · Spring Boot 3 · Docker · Kubernetes · Helm · Kind · AWS EKS · RDS · ECR · CloudFormation · GitHub Actions · Prometheus · Grafana · k6 · Trivy · CodeQL · Checkov
+## What the Pipeline Does
+
+A single `git push main` to GitHub triggers two automated workflows that run in parallel:
+
+### CI/CD Pipeline (App Changes)
+
+Triggered when application or Docker files change. Runs these steps in order:
+
+1. **Secret Scan** — Checks the entire repository for accidentally committed AWS credentials or API keys. If found, the pipeline stops immediately.
+2. **Build and Test** — Compiles the Java application and runs all unit tests.
+3. **CodeQL Analysis** — Scans the Java codebase for security vulnerabilities using GitHub's semantic analysis engine.
+4. **Docker Build and Push** — Builds a container image and pushes it to AWS ECR, tagged with the commit ID (the full Git SHA, for example `dfdd39e6a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6`). This means every image in the registry is linked to the exact code that built it. If you see a pod running `secureflow:dfdd39e6`, you know precisely which commit produced it — no guessing whether it was built before or after a given fix. The image is also tagged as `latest`, but the SHA tag is the source of truth for traceability.
+5. **Container Vulnerability Scan** — Scans the pushed image for operating system and library-level vulnerabilities. Fails on critical or high severity findings.
+6. **Deploy to EKS** — Installs or upgrades the application on the EKS cluster using Helm. The database endpoint is fetched automatically from CloudFormation outputs — no manual configuration needed.
+
+### Infrastructure Pipeline (AWS Changes)
+
+Triggered when CloudFormation or workflow files change. Runs these steps in order:
+
+1. **Infrastructure Security Scan** — Validates all CloudFormation templates for security misconfigurations using Checkov, and checks template syntax with cfn-lint.
+2. **Deploy Infrastructure** — Creates or updates eight CloudFormation stacks in strict dependency order (see below).
+3. **Install ALB Controller** — After the stacks are ready, installs the AWS Load Balancer Controller onto the EKS cluster via Helm. This controller watches for Kubernetes ingress resources and automatically provisions Application Load Balancers in AWS, so every deploy gets a public URL without manual setup.
 
 ---
 
-## Repository Structure
+## AWS Infrastructure — Deployed Automatically
 
-```
-secureflow/
-├── app/                  ← Spring Boot API (source, Dockerfile, pom.xml)
-├── cloudformation/       ← AWS infrastructure stacks (VPC, EKS, RDS, ECR, IAM, Budgets)
-├── helm/secureflow/      ← Helm chart with values for local and EKS environments
-├── monitoring/           ← Prometheus config, alert rules, Grafana dashboards
-├── scripts/              ← Local orchestration, load tests, incident simulations, teardown
-├── docs/                 ← AWS deployment playbook, SRE SLOs, incident playbooks
-├── .github/workflows/    ← CI/CD pipeline
-└── docker-compose.yml    ← Full local stack (app + postgres + prometheus + grafana)
-```
+All infrastructure is defined as CloudFormation templates and deployed by the pipeline. The stacks are deployed in this sequence:
 
----
-
-## Prerequisites
-
-```bash
-brew install kind kubernetes-cli helm k6
-```
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (must be running)
-- Java 21 + Maven 3.9 (optional — build is containerized)
-
----
-
-## Local Testing
-
-```bash
-./scripts/run-locally.sh
-```
-
-| Phase | Environment | Validates |
+| Order | Stack Name | What It Creates |
 |---|---|---|
-| 1 | Docker Compose | Application under 100 VU spike load |
-| 2 | Kind Kubernetes | HPA, pod scaling, service routing under the same load |
-| 3 | Kind Kubernetes | Alerting, self-healing, and recovery via incident simulations |
-| 4 | — | Teardown |
+| 1 | secureflow-vpc | Virtual private cloud with public and private subnets across two availability zones, internet gateway, NAT gateway, and route tables |
+| 2 | secureflow-iam-base | IAM roles for the EKS cluster and its worker nodes |
+| 3 | secureflow-eks | EKS cluster running Kubernetes with a managed node group using Spot Instances (t3.medium, minimum 1, maximum 3, desired 2) |
+| 4 | secureflow-iam-irsa | IAM roles for Kubernetes service accounts, linked to the cluster's OIDC provider (requires the EKS stack to exist first) |
+| 5 | secureflow-alb-controller | IAM policy and IRSA role for the AWS Load Balancer Controller, allowing it to create and manage Application Load Balancers (requires the EKS OIDC URL) |
+| 6 | secureflow-rds | PostgreSQL database in private subnets, accessible only from the EKS node security group. Uses a single AZ and small instance type for cost control |
+| 7 | secureflow-ecr | Container registry to store application images. Scan on push is enabled, and only the ten most recent images are kept |
+| 8 | secureflow-budgets | AWS Budget alerts at two, five, ten, and fifteen dollars that notify the team by email when costs approach each threshold |
 
-Monitoring: Prometheus `localhost:9090` · Grafana `localhost:3000` (Docker Compose) — offset to `9091` / `3001` for Kind.
-
----
-
-## AWS Deployment
-
-Add 5 GitHub secrets (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ACCOUNT_ID`, `AWS_REGION`, `NOTIFICATION_EMAIL`), then:
-
-```bash
-git push origin main
-```
-
-Pipeline runs end to end. `RDS_ENDPOINT` and `ALB_DNS` are resolved automatically from CloudFormation outputs. See [docs/aws-deploy.md](docs/aws-deploy.md).
+The pipeline handles all dependencies automatically. For example, it waits for the VPC and IAM roles to finish before creating the EKS cluster, and fetches the OIDC URL from the EKS stack before creating the IRSA roles.
 
 ---
 
-## Teardown
+## How Everything Connects
 
-```bash
-./scripts/teardown.sh       # local
-./scripts/teardown-aws.sh   # AWS (~33 min, confirmation required)
-```
+The VPC and EKS cluster provide the network and compute layer. The database lives inside the private subnets and is only reachable from the cluster. The container registry stores the application images. IAM roles control what each component can access. Budget alerts protect against unexpected costs.
+
+When the CI pipeline deploys the application, it reads the database endpoint directly from the RDS CloudFormation stack output and injects it into the Helm chart. No database endpoint secrets are stored in GitHub — everything is resolved at deploy time.
+
+The AWS Load Balancer Controller running in the cluster watches for the Kubernetes ingress and automatically provisions an internet-facing ALB in AWS. The ALB DNS is printed at the end of the deploy step so you can immediately test the live API.
 
 ---
 
-## Further Reading
+## Security Layers
 
-- [Local Setup Guide](docs/local-setup.md)
-- [AWS Deployment Playbook](docs/aws-deploy.md)
-- [SRE SLOs](docs/sre-slos.md)
-- [Incident Playbooks](docs/incident-playbooks.md)
+Security checks are embedded at every stage of the pipeline:
+
+- **git-secrets** runs first on every push to catch leaked credentials before any processing begins
+- **CodeQL** analyzes the Java code for application-level vulnerabilities
+- **Checkov** validates CloudFormation templates against hundreds of infrastructure security rules
+- **cfn-lint** checks template syntax and enforces best practices
+- **Trivy** scans the final container image for known vulnerabilities
+- Any failure in any security step blocks the entire pipeline
+
+---
+
+## Local Development
+
+The entire stack can run on a laptop without any AWS account. The local workflow has four phases:
+
+1. **Docker Compose** runs the application, PostgreSQL, Prometheus, and Grafana together. A 100-user load test validates the application behavior.
+2. **Kind Kubernetes** provisions a local cluster and deploys the same application. The same load test validates Kubernetes behaviors like pod scaling and service routing.
+3. **Incident Simulations** inject failures into the local cluster — pod crashes, memory pressure, and broken deployments — to verify that monitoring, alerting, and recovery all work correctly.
+4. **Teardown** destroys everything created locally.
+
+Only after local validation passes would you push to GitHub to deploy to AWS.
+
+---
+
+## Cost Control
+
+- Development and testing happen entirely on your laptop for free
+- AWS is only used for final validation or demo evidence
+- All AWS resources can be destroyed with a single script
+- EKS uses Spot Instances, reducing compute costs by 70 to 90 percent
+- A typical two-to-three hour demo session costs less than one dollar
+- Budget alerts notify the team at two, five, ten, and fifteen dollars
+
+---
+
+## Stack Summary
+
+The project uses Java 21 and Spring Boot 3 for the application. Docker and Kubernetes handle containerization and orchestration. Helm packages the application for deployment. Kind provides a local Kubernetes environment. AWS services include EKS for Kubernetes, RDS for PostgreSQL, ECR for container images, and CloudFormation for infrastructure as code. GitHub Actions orchestrates the pipelines. Prometheus and Grafana provide monitoring and visualization. k6 runs load testing. Security scanning uses Trivy, CodeQL, Checkov, cfn-lint, and git-secrets.

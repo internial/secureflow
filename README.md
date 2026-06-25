@@ -105,9 +105,66 @@ The project uses Java 21 and Spring Boot 3 for the application. Docker and Kuber
 
 ---
 
-## Screenshots
+## Screenshots (Production Run)
 
-- [Local run (Grafana, k6, Kind, crash simulation)](docs/local%20run%20pics.md)
-- [Production run (GitHub Actions, Grafana, AWS Console, crash recovery)](docs/production%20run%20pics.md)
+### GitHub Actions — CI/CD Pipeline (ci.yml)
+
+All security checks passing: git-secrets, build & test, CodeQL, Docker build & push, Trivy scan, deploy to EKS.
+
+![ci.yml](docs/images/production%20run%20pics_image1_973720769.png)
+
+### GitHub Actions — Infrastructure Pipeline (infra.yml)
+
+Checkov, cfn-lint, 7 CloudFormation stacks deployed, ALB controller installed via Helm.
+
+![infra.yml](docs/images/production%20run%20pics_image2_2149941432.png)
+
+### Grafana — Load Tested Metrics
+
+Real-time dashboards showing request rate, p95 latency, error rate, JVM CPU, heap memory, and active pod replicas after k6 spike load test (185 req/s, 0% errors, p99 99ms).
+
+![Grafana metrics](docs/images/production%20run%20pics_image3_2720016540.png)
+
+### Grafana — k6 Load Test
+
+![k6 results](docs/images/production%20run%20pics_image4_922359570.png)
+
+**ALB DNS:** `k8s-securefl-securefl-79ebebac3c-1146011751.us-east-1.elb.amazonaws.com`  
+**ECR repo:** `054041090724.dkr.ecr.us-east-1.amazonaws.com/secureflow`
+
+### Grafana — SRE Incident: Pod Crash & Self-Healing
+
+One pod force-deleted to simulate a server crash. Kubernetes ReplicaSet automatically recovered — pod count dropped to 1 then returned to 2 within seconds. No human intervention.
+
+![Crash simulation](docs/images/production%20run%20pics_image5_1800433388.png)
+
+### AWS CloudFormation Stacks
+
+All 7 stacks in CREATE_COMPLETE status — VPC, IAM base, EKS cluster, IRSA roles, RDS PostgreSQL, ECR repository, Budgets.
+
+![CloudFormation stacks](docs/images/production%20run%20pics_image6_3696428070.png)
+
+### AWS EKS Cluster
+
+![EKS cluster](docs/images/production%20run%20pics_image7_3682575457.png)
+
+### AWS RDS (PostgreSQL)
+
+![RDS](docs/images/production%20run%20pics_image8_1964217719.png)
+
+### AWS Application Load Balancer
+
+![ALB](docs/images/production%20run%20pics_image9_916056477.png)
+
+### Persistent Users in Database
+
+Three demo users created to prove RDS persistence across pod restarts and deployments.
+
+![Database users](docs/images/production%20run%20pics_image10_94168800.png)
+
+### Additional Documents
+
+- [Full production screenshots with descriptions](docs/production%20run%20pics.md)
+- [Local run screenshots](docs/local%20run%20pics.md)
 - [Lessons learned](docs/lessons-learned.md)
 - [Full project specification](docs/spec.md)

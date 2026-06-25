@@ -102,3 +102,12 @@ Only after local validation passes would you push to GitHub to deploy to AWS.
 ## Stack Summary
 
 The project uses Java 21 and Spring Boot 3 for the application. Docker and Kubernetes handle containerization and orchestration. Helm packages the application for deployment. Kind provides a local Kubernetes environment. AWS services include EKS for Kubernetes, RDS for PostgreSQL, ECR for container images, and CloudFormation for infrastructure as code. GitHub Actions orchestrates the pipelines. Prometheus and Grafana provide monitoring and visualization. k6 runs load testing. Security scanning uses Trivy, CodeQL, Checkov, cfn-lint, and git-secrets.
+
+---
+
+## Screenshots
+
+- [Local run (Grafana, k6, Kind, crash simulation)](docs/local%20run%20pics.md)
+- [Production run (GitHub Actions, Grafana, AWS Console, crash recovery)](docs/production%20run%20pics.md)
+- [Lessons learned](docs/lessons-learned.md)
+- [Full project specification](docs/spec.md)

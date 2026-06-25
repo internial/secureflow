@@ -1,0 +1,1 @@
+When a job fails, summarize the error in 2-3 bullet points. List only the root cause, the failing file, and a 1-line code fix. Skip all conversational filler and long explanations.

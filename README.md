@@ -112,11 +112,23 @@ Full-resolution PDF with all screenshots and descriptions:
 - [**Production Run — Screenshots & Details**](docs/production%20run%20pics.pdf)
 - [**Local Run — Screenshots & Details**](docs/local%20run%20pics.pdf)
 
+### Load Test Results (k6 Spike Test — 100 VUs)
+
+| Metric | Value |
+|---|---|
+| Requests per second | 185.52 |
+| Total requests | 22,302 |
+| Success rate | 100% (0 failures) |
+| Average latency | 39 ms |
+| p95 latency | 99 ms |
+| p99 latency | 99 ms |
+| Max latency | 2.79 s |
+
 ### What's Covered
 
 - GitHub Actions CI/CD pipeline — all security checks passing
 - GitHub Actions Infrastructure pipeline — CloudFormation deploy
-- Grafana dashboards after k6 spike load test (185 req/s, 0% errors, p95 99ms)
+- Grafana dashboards after k6 spike load test
 - Grafana SRE incident simulation — pod crash & automatic self-healing
 - AWS CloudFormation stacks — all 7 in CREATE_COMPLETE
 - AWS EKS cluster, RDS PostgreSQL, Application Load Balancer
@@ -124,6 +136,5 @@ Full-resolution PDF with all screenshots and descriptions:
 
 ### Additional Documents
 
-- [Architecture diagram](docs/architecture.md)
 - [Lessons learned](docs/lessons-learned.md)
 - [Full project specification](docs/spec.md)

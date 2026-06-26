@@ -135,7 +135,7 @@ Metrics measured:
 - GitHub Actions Infrastructure pipeline — CloudFormation deploy
 - Grafana dashboards after k6 spike load test
 - Grafana SRE incident simulation — pod crash & automatic self-healing
-- AWS CloudFormation stacks — all 7 in CREATE_COMPLETE
+- AWS CloudFormation stacks — all 8 in CREATE_COMPLETE
 - AWS EKS cluster, RDS PostgreSQL, Application Load Balancer
 - Persistent users in database proving RDS works
 

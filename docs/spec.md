@@ -1,5 +1,5 @@
-# SECUREFLOW — AI IDE FULL REPOSITORY GENERATION PROMPT
-# Augmented & Clarified — Ready for Cursor / Windsurf / Copilot
+# SECUREFLOW — Full Project Specification
+# Updated to reflect current project state
 
 You are generating a complete production-style DevOps / DevSecOps / SRE portfolio project called SecureFlow.
 
@@ -86,19 +86,25 @@ secureflow/
 │   ├── ingress-eks.yaml          ← ALB ingress for EKS
 │   ├── hpa.yaml
 │   ├── configmap.yaml
-│   └── secret.yaml
+│   ├── secret.yaml
+│   ├── grafana-deployment.yaml   ← Grafana on Kubernetes
+│   └── prometheus-deployment.yaml ← Prometheus on Kubernetes
 ├── monitoring/
 │   ├── prometheus/
 │   │   ├── prometheus.yml         ← Prometheus configuration
-│   │   └── alerts.yaml
-│   ├── grafana/
-│   │   ├── datasources/
-│   │   ├── dashboards/
-│   │   │   └── secureflow.json   ← Grafana dashboard provisioning
-│   └── grafana-dashboard.json    ← Additional dashboard config
+│   │   └── alerts.yaml            ← Prometheus alert rules
+│   └── grafana/
+│       ├── datasources/
+│       │   └── datasource.yml     ← Auto-provision Prometheus datasource
+│       └── dashboards/
+│           ├── dashboard.yml      ← Dashboard loader config
+│           └── secureflow.json    ← Grafana dashboard provisioning
 ├── scripts/
 │   ├── run-locally.sh            ← One-command local orchestration: 4 phases
 │   ├── kind-cluster-setup.sh     ← One-command Kind cluster bootstrap
+│   ├── local-env.sh              ← Local env var exports (sourced by other scripts)
+│   ├── check-monitoring.sh       ← Automated metrics collection during simulations
+│   ├── setup-git-secrets.sh      ← Install and configure git-secrets hooks
 │   ├── teardown.sh               ← Local teardown (Kind + Docker Compose)
 │   ├── teardown-aws.sh           ← AWS teardown (Helm + CloudFormation stacks)
 │   ├── k6-spike.js               ← 100 VU spike test (reused in Phase 1 + 2)
@@ -110,12 +116,17 @@ secureflow/
 │   ├── local-setup.md
 │   ├── aws-deploy.md
 │   ├── incident-playbooks.md
-│   └── sre-slos.md
+│   ├── sre-slos.md
+│   ├── lessons-learned.md
+│   ├── spec.md
+│   ├── production run pics.pdf
+│   └── local run pics.pdf
 ├── kind-config.yaml              ← Kind cluster config (port mappings + ingress)
 ├── docker-compose.yml            ← app + postgres + prometheus + grafana
 ├── .github/
 │   └── workflows/
-│       └── ci.yml
+│       ├── ci.yml               ← App CI/CD pipeline
+│       └── infra.yml            ← Infrastructure pipeline (CloudFormation)
 ├── README.md
 └── .gitignore
 
@@ -263,6 +274,16 @@ secret.yaml:
 - SPRING_DATASOURCE_USERNAME (base64)
 - SPRING_DATASOURCE_PASSWORD (base64)
 
+grafana-deployment.yaml:
+- grafana/grafana:latest
+- port 3000, NodePort 30001
+- Provisioning configs from ConfigMap
+
+prometheus-deployment.yaml:
+- prom/prometheus:latest
+- port 9090, NodePort 30000
+- Config from ConfigMap + alerts from file
+
 ------------------------------------------------------------
 PHASE 6 — HELM
 ------------------------------------------------------------
@@ -333,30 +354,39 @@ Monitoring port configuration:
 ------------------------------------------------------------
 PHASE 8 — CI/CD (GITHUB ACTIONS)
 ------------------------------------------------------------
-Create .github/workflows/ci.yml:
+Create two workflow files:
 
-Trigger: push to main, pull_request to main
+.github/workflows/ci.yml — App CI/CD Pipeline:
+Trigger: push or PR to main (paths-ignore: *.md, docs/**, scripts/**, k8s/**, cloudformation/**, infra.yml)
 
 Jobs in order (main branch push only for deployment jobs):
 
 1. git-secrets          — scan for leaked credentials
 2. build-and-test       — Java 21, mvn clean verify, upload test results
 3. codeql               — static analysis for Java vulnerabilities
-4. checkov-cfnlint      — Checkov (security) + cfn-lint (template syntax) on /cloudformation
-                           cfn-lint: .cfnlintrc.yaml ignores catalog rules (E3062, W3691);
-                           CI fails only on cfn-lint errors, not warnings
-5. deploy-infrastructure — CloudFormation stacks in dependency order (see Phase 9)
-                           On failure: prints failed resources + stack events (not just ROLLBACK_COMPLETE)
-                           Stops on ROLLBACK_COMPLETE with delete-stack instructions
-                           Skips stacks in unexpected states; updates stacks that already exist
-                           Fetches RDS endpoint from stack output automatically
-                           Outputs: rds-endpoint, oidc-url
-6. docker-build-push    — Build + push to ECR (tagged with github.sha + latest)
-7. trivy                — Container scan on ECR image, fail on HIGH/CRITICAL
-8. deploy-to-eks        — Helm upgrade --install to EKS
-                           RDS endpoint injected from deploy-infrastructure outputs
+4. docker-build-push    — Build + push to ECR (tagged with github.sha + latest)
+5. trivy                — Container scan on ECR image, fail on HIGH/CRITICAL
+6. deploy-to-eks        — Helm upgrade --install to EKS
+                           RDS endpoint fetched from secureflow-rds CloudFormation output
                            ALB DNS fetched from kubectl get ingress after deploy
                            No manual RDS_ENDPOINT or ALB_DNS secrets needed
+
+.github/workflows/infra.yml — Infrastructure Pipeline:
+Trigger: push to main when cloudformation/** or infra.yml changes
+
+Jobs in order:
+
+1. checkov-cfnlint      — Checkov (security) + cfn-lint (template syntax) on /cloudformation
+                           cfn-lint: .cfnlintrc.yaml ignores catalog rules (E3062, W3691);
+                           CI fails only on cfn-lint errors, not warnings
+2. deploy-infrastructure — 8 CloudFormation stacks in dependency order (see Phase 9)
+                           On failure: prints failed resources + stack events
+                           Stops on ROLLBACK_COMPLETE with delete-stack instructions
+                           Skips stacks in unexpected states; updates stacks that already exist
+                           Fetches RDS endpoint + OIDC URL from stack outputs automatically
+3. install-alb-controller — Install AWS Load Balancer Controller via Helm
+                           Fetches ALB IAM role ARN from secureflow-alb-controller stack output
+                           Fetches VPC ID from EKS cluster describe
 
 Required GitHub Secrets:
 - AWS_ACCESS_KEY_ID
@@ -400,6 +430,11 @@ rds.yaml:
 - SkipFinalSnapshot: true (cost control)
 - Output: RDSEndpoint
 
+alb-controller.yaml:
+- IAM policy for AWS Load Balancer Controller
+- IRSA role allowing ALB controller to create/manage ALBs in AWS
+- Requires OIDCIssuerURL from eks.yaml (deployed after EKS)
+
 ecr.yaml:
 - ECR repository: secureflow
 - Scan on push enabled
@@ -415,9 +450,10 @@ Deployment order (handled automatically by deploy-infrastructure job):
 2. iam-base.yaml
 3. eks.yaml
 4. iam-irsa.yaml  (OIDC URL fetched from eks.yaml output)
-5. rds.yaml
-6. ecr.yaml
-7. budgets.yaml
+5. alb-controller.yaml  (OIDC URL fetched from eks.yaml output)
+6. rds.yaml
+7. ecr.yaml
+8. budgets.yaml
 
 NOTE: iam.yaml is split into iam-base.yaml and iam-irsa.yaml to avoid circular
 dependency — IRSA requires the OIDC URL which only exists after EKS deploys.
@@ -485,10 +521,12 @@ scripts/teardown.sh — local teardown:
 scripts/teardown-aws.sh — AWS teardown (run manually after screenshots):
 - Confirmation prompt before proceeding
 - helm uninstall secureflow -n secureflow
-- Wait 5 minutes for ALB deletion
+- Force-delete ECR repository (delete all images + repo)
 - Delete CloudFormation stacks in reverse order with waits:
-  secureflow-budgets → secureflow-ecr → secureflow-rds →
-  secureflow-iam-irsa → secureflow-eks → secureflow-iam-base → secureflow-vpc
+  secureflow-budgets, secureflow-ecr, secureflow-rds, secureflow-iam-irsa (parallel)
+  → secureflow-alb-controller
+  → secureflow-eks (waits ~10-15 min, EKS is slow to delete)
+  → secureflow-iam-base, secureflow-vpc (parallel)
 - Print: "All AWS resources destroyed. No further charges."
 - Total teardown time: ~33 minutes
 
